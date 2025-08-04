@@ -4,7 +4,7 @@ from .DHRobotWithBeta_torch import DHRobotWithBeta
 from typing import List, Dict
 import json
 from datetime import datetime
-from .cloud import fit_sphere_center_TLS_A
+from data_process.cloud import fit_sphere_center_TLS_A
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -418,7 +418,7 @@ class RobotCalibrator:
         
         # 添加学习率调度器
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.7, patience=50
+            optimizer, mode='min', factor=0.5, patience=40
         )
         
         if verbose:
