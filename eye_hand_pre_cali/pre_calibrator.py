@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from data_process.robot_model import create_robot
-from data_process.cloud import fit_sphere_center_TLS_A
+import json
+from robot_model.robots import create_robot
 
 
 class PreCalibrator:
@@ -12,12 +12,14 @@ class PreCalibrator:
         self.robot = None
         self.observations = None
         
-    def set_observations(self, observations):
+    def set_observations(self, observations, max_observations: int = None):
         """
-        设置观测数据
+        设置观测数据 - 适配新的数据格式
         
         参数:
             observations: 已处理的观测数据列表
+            max_observations: 最大读取观测数据个数，None表示读取全部
+            新格式: 包含 joint_state 和 point_cloud_center
             
         返回:
             bool: 设置是否成功
@@ -25,6 +27,10 @@ class PreCalibrator:
         if observations is None:
             print("❌ 观测数据不能为空")
             return False
+        
+        # 限制观测数据数量
+        if max_observations is not None and max_observations > 0:
+            observations = observations[:max_observations]
             
         if len(observations) < 12:
             print(f"❌ 观测数据不足，需要至少12组，当前只有{len(observations)}组")
@@ -33,6 +39,40 @@ class PreCalibrator:
         self.observations = observations
         print(f"✓ 成功设置 {len(observations)} 个观测数据")
         return True
+    
+    def load_observations_from_json(self, json_file_path: str, max_observations: int = None):
+        """
+        从JSON文件加载观测数据
+        
+        参数:
+            json_file_path: observations.json文件路径
+            max_observations: 最大读取观测数据个数，None表示读取全部
+            
+        返回:
+            bool: 加载是否成功
+        """
+        try:
+            with open(json_file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            if 'observations' not in data:
+                print("❌ JSON文件必须包含 'observations' 字段")
+                return False
+            
+            observations = data['observations']
+            total_observations = len(observations)
+            
+            success = self.set_observations(observations, max_observations)
+            if success:
+                if max_observations is not None and max_observations < total_observations:
+                    print(f"✓ 成功从 {json_file_path} 加载 {len(self.observations)} 个观测数据 (共 {total_observations} 个)")
+                else:
+                    print(f"✓ 成功从 {json_file_path} 加载观测数据")
+            return success
+            
+        except Exception as e:
+            print(f"❌ 从JSON文件加载观测数据失败: {str(e)}")
+            return False
         
     def _joint_angles_to_poses(self, joint_angles_list, robot=None):
         """
@@ -53,12 +93,21 @@ class PreCalibrator:
         poses_list = []
         
         for joint_angles in joint_angles_list:
+            # 确保关节角度是torch tensor
+            if not isinstance(joint_angles, torch.Tensor):
+                joint_angles = torch.tensor(joint_angles, dtype=torch.float64)
+            
             # 计算正运动学
             T_end = robot.fkine(joint_angles)
             
-            # 提取旋转矩阵和平移向量
-            R_e_b = T_end[:3, :3].detach().numpy()
-            t_e_b = T_end[:3, 3].detach().numpy().reshape(-1, 1)
+            # 提取旋转矩阵和平移向量，转换为numpy
+            if isinstance(T_end, torch.Tensor):
+                R_e_b = T_end[:3, :3].detach().numpy()
+                t_e_b = T_end[:3, 3].detach().numpy().reshape(-1, 1)
+            else:
+                # 兼容老版本接口
+                R_e_b = T_end[:3, :3]
+                t_e_b = T_end[:3, 3].reshape(-1, 1)
             
             poses_list.append([R_e_b, t_e_b])
         
@@ -130,10 +179,11 @@ class PreCalibrator:
             A_vec = points[i] - points[j]
             
             # 数据有效性检查
-            if np.linalg.norm(A_vec) < 1e-6 or np.linalg.norm(B_vec) < 1e-6:
+            '''
+            if np.linalg.norm(A_vec) < 1e-8 or np.linalg.norm(B_vec) < 1e-8:
                 print(f"警告: 配对 {i+1}-{j+1} 向量差过小，可能影响求解精度")
                 continue
-            
+            '''
             # 确保向量是1D的
             A_list.append(A_vec.flatten())
             B_list.append(B_vec.flatten())
@@ -209,29 +259,29 @@ class PreCalibrator:
                 R_j = poses[j][0]
                 t_i = poses[i][1]
                 t_j = poses[j][1]
-            
-            # 计算系数矩阵 (公式9左侧)
-            A_block = R_i - R_j
-            
-            # 计算常数项 (公式9右侧)
-            term1 = R_j @ R_se @ points[j]
-            term2 = R_i @ R_se @ points[i]
-            b_vec = term1 - term2 + t_j - t_i
-            
-            # 数据有效性检查
-            A_condition = np.linalg.cond(A_block)
-            if A_condition > 1e18:
-                print(f"警告: 配对 {i+1}-{j+1} 系数矩阵条件数过大 ({A_condition:.2e})，可能影响求解精度")
-                continue
-            
-            if np.linalg.norm(b_vec) < 1e-8:
-                print(f"警告: 配对 {i+1}-{j+1} 常数项过小，跳过此配对")
-                continue
-            
-            A_list.append(A_block)
-            b_list.append(b_vec.flatten())  # 确保是1D向量
-            
-            print(f"配对 {i+1}-{j+1}: A条件数={A_condition:.2e}, b_vec范数={np.linalg.norm(b_vec):.6f}")
+                
+                # 计算系数矩阵 (公式9左侧)
+                A_block = R_i - R_j
+                
+                # 计算常数项 (公式9右侧)
+                term1 = R_j @ R_se @ points[j]
+                term2 = R_i @ R_se @ points[i]
+                b_vec = term1 - term2 + t_j - t_i
+                
+                # 数据有效性检查
+                A_condition = np.linalg.cond(A_block)
+                if A_condition > 1e18:
+                    print(f"警告: 配对 {i+1}-{j+1} 系数矩阵条件数过大 ({A_condition:.2e})，可能影响求解精度")
+                    continue
+                
+                if np.linalg.norm(b_vec) < 1e-8:
+                    print(f"警告: 配对 {i+1}-{j+1} 常数项过小，跳过此配对")
+                    continue
+                
+                A_list.append(A_block)
+                b_list.append(b_vec.flatten())  # 确保是1D向量
+                
+                print(f"配对 {i+1}-{j+1}: A条件数={A_condition:.2e}, b_vec范数={np.linalg.norm(b_vec):.6f}")
         
         if len(A_list) < 3:
             raise ValueError("有效的数据对不足3个，无法求解平移向量")
@@ -266,37 +316,40 @@ class PreCalibrator:
 
     def _extract_sphere_centers(self, observations):
         """
-        从观测数据中提取球心坐标 - 提高精度版本
+        从观测数据中提取球心坐标 - 新格式
         
         参数:
             observations: 观测数据列表
+            新格式: 包含 point_cloud_center 字段，直接使用预计算的球心
             
         返回:
             measured_points: 球心坐标列表
         """
         measured_points = []
         for idx, obs in enumerate(observations):
-            point_cloud = obs['point_cloud']
-            if len(point_cloud) < 20:  # 提高最小点云数量要求
-                print(f"警告: 观测 {idx+1} 点云数量不足 ({len(point_cloud)} < 20)，跳过")
-                continue
-                
             try:
-                # 使用双精度浮点数提高精度
-                sphere_center = fit_sphere_center_TLS_A(
-                    torch.tensor(point_cloud, dtype=torch.float64)
-                ).detach().numpy().reshape(3, 1)
-                
-                # 验证球心坐标的合理性
-                if np.any(np.isnan(sphere_center)) or np.any(np.isinf(sphere_center)):
-                    print(f"警告: 观测 {idx+1} 球心坐标无效，跳过")
+                # 检查新格式：直接使用预计算的点云中心
+                if 'point_cloud_center' in obs:
+                    point_cloud_center = obs['point_cloud_center']
+                    if point_cloud_center is not None:
+                        # 转换为numpy数组并reshape为列向量
+                        sphere_center = np.array(point_cloud_center, dtype=np.float64).reshape(3, 1)
+                        print(f"观测 {idx+1}: 使用预计算球心 = [{sphere_center[0,0]:.6f}, {sphere_center[1,0]:.6f}, {sphere_center[2,0]:.6f}]")
+                        
+                        # 验证球心坐标的合理性
+                        if np.any(np.isnan(sphere_center)) or np.any(np.isinf(sphere_center)):
+                            print(f"警告: 观测 {idx+1} 球心坐标无效，跳过")
+                            continue
+                        measured_points.append(sphere_center)
+                    else:
+                        print(f"警告: 观测 {idx+1} 点云中心为空，跳过")
+                        continue
+                else:
+                    print(f"❌ 观测 {idx+1} 没有 'point_cloud_center' 字段，请使用新格式的观测数据")
                     continue
-                    
-                measured_points.append(sphere_center)
-                print(f"观测 {idx+1}: 球心坐标 = [{sphere_center[0,0]:.6f}, {sphere_center[1,0]:.6f}, {sphere_center[2,0]:.6f}]")
                 
             except Exception as e:
-                print(f"警告: 观测 {idx+1} 球心拟合失败: {str(e)}")
+                print(f"警告: 观测 {idx+1} 球心处理失败: {str(e)}")
                 continue
                 
         print(f"成功提取 {len(measured_points)} 个有效球心坐标")

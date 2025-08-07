@@ -22,5 +22,6 @@ Thumbs.db
 
 # Project specific
 results/
+origin_data/
 data/
 
