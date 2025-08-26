@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import json
-from robot_model.robots import create_robot
+from .robots import create_robot
 
 
 class PreCalibrator:

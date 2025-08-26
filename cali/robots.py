@@ -45,17 +45,6 @@ def ABB6700_dh_params():
     return dh
 
 
-def FR16_calibrated_dh_params():
-    """获取FR16机器人校准后的DH参数"""
-    dh = [
-        {'alpha': 1.570431, 'theta': 0.000000, 'd': 180.000, 'a': -0.949, 'beta': 0.000000},  # Joint 1
-        {'alpha': -0.001079, 'theta': -0.002044, 'd': 0.000, 'a': -520.121, 'beta': -0.000801},  # Joint 2
-        {'alpha': 0.000855, 'theta': -0.001400, 'd': 0.000, 'a': -399.701, 'beta': -0.000730},  # Joint 3
-        {'alpha': 1.570837, 'theta': -0.001248, 'd': 159.000, 'a': 0.578, 'beta': 0.000000},  # Joint 4
-        {'alpha': -1.571994, 'theta': 0.004534, 'd': 114.506, 'a': -0.125, 'beta': 0.000000},  # Joint 5
-        {'alpha': -0.000000, 'theta': 0.000000, 'd': 106.000, 'a': 0.000, 'beta': 0.000000},  # Joint 6
-    ]
-    return dh
 
 
 def create_robot_model(robot_name="FR16", model_type="mdh"):
@@ -80,9 +69,6 @@ def create_robot_model(robot_name="FR16", model_type="mdh"):
         elif robot_name == "FR16":
             dh_params = FR16_dh_params()
             robot_full_name = "FR16_Calibration_Robot"
-        elif robot_name == "FR16_CALIBRATED":
-            dh_params = FR16_calibrated_dh_params()
-            robot_full_name = "FR16_Calibrated_Robot"
         elif robot_name == "ABB6700":
             dh_params = ABB6700_dh_params()
             robot_full_name = "ABB6700_Calibration_Robot"
