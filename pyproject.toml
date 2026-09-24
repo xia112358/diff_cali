@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diff-cali"
+version = "0.1.0"
+description = "Differentiable robot kinematic calibration with PyTorch"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.23",
+    "torch>=2.0",
+    "matplotlib>=3.7",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cali*"]
