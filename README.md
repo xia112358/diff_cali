@@ -53,3 +53,22 @@ For hand-eye initialization, use `PreCalibrator` from `cali.pre_calibrator`.
 ## Notes
 
 This is a compact engineering project rather than an actively maintained research codebase. Units in the bundled robot parameters and example observation data are millimetres unless noted otherwise.
+
+## FR16 example and results
+
+Run the former notebook workflow as a Python script from the repository root:
+
+```bash
+python -m pip install -e .
+python examples/fr16.py
+```
+
+The example uses `data/hand_eye_data/pose2_test1` for hand-eye initialization,
+`data/main_data/pose3` for calibration, and the first 30 observations in
+`data/main_data/pose4` for validation. Generated plots are written to
+`results/fr16/generated/`. Other datasets remain available under `data/`; their
+names do not establish a train/test split. See [data notes](data/README.md).
+
+The [FR16 results](results/fr16/README.md) include example plots and describe
+their scope. These show dispersion on the recorded observations, not absolute
+robot positioning accuracy.
