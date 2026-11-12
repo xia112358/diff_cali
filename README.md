@@ -4,6 +4,23 @@ A small robot kinematic calibration project implemented with PyTorch.
 
 The project uses differentiable DH kinematics and gradient-based optimization to estimate robot kinematic parameters and hand-eye calibration parameters from repeated observations.
 
+## Core algorithm
+
+Given joint angles `q_i` and a measured target center `p_i` in the sensor
+frame, the differentiable DH + beta model and hand-eye transform compute
+`x_i = T_base_sensor(q_i; parameters) [p_i, 1]`. For repeated observations
+of the same stationary target, calibration minimizes the sum of sample
+variances of the three coordinates of `x_i`. A smaller spread means greater
+consistency; it does not directly measure absolute positioning accuracy.
+
+The FR16 example estimates the hand-eye transform from 12 ordered observations
+(four translation poses and eight rotation poses), then jointly optimizes
+selected kinematic and hand-eye parameters with PyTorch autograd and AdamW.
+Gradient clipping and a learning-rate scheduler are used; optional outlier
+rejection is disabled in the example. The variance target, convergence
+tolerance and iteration limit govern stopping. Parameter identifiability,
+measurement noise and observation diversity affect the result.
+
 ## Features
 
 - Differentiable DH / beta-parameter robot model
